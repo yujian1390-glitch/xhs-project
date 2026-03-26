@@ -12,7 +12,9 @@
     "next": "15.2.4",
     "react": "19.0.0",
     "react-dom": "19.0.0",
-    "pdfjs-dist": "4.10.38"
+    "pdfjs-dist": "4.10.38",
+    "konva": "9.3.18",
+    "react-konva": "19.0.7"
   },
   "devDependencies": {
     "@types/node": "22.13.10",

@@ -21,6 +21,7 @@ interface UsePdfUploadResult {
   activeTemplateId: string;
   frameSettings: FrameStyleSettings;
   isApplyingTemplate: boolean;
+  coverBaseImage: string | null;
   handleFileSelect: (file: File) => Promise<void>;
   setCurrentPage: (page: number) => Promise<void>;
   togglePageSelected: (page: number) => void;
@@ -51,6 +52,7 @@ export function usePdfUpload(): UsePdfUploadResult {
   const [activeTemplateId, setActiveTemplateId] = useState(DEFAULT_TEMPLATE.id);
   const [frameSettings, setFrameSettings] = useState<FrameStyleSettings>(DEFAULT_TEMPLATE.settings);
   const [isApplyingTemplate, setIsApplyingTemplate] = useState(false);
+  const [coverBaseImage, setCoverBaseImage] = useState<string | null>(null);
 
   const pdfRef = useRef<any>(null);
   const appliedPageStyleRef = useRef<Map<number, FrameStyleSettings>>(new Map());
@@ -71,6 +73,7 @@ export function usePdfUpload(): UsePdfUploadResult {
     setActiveTemplateId(DEFAULT_TEMPLATE.id);
     setFrameSettings(DEFAULT_TEMPLATE.settings);
     setIsApplyingTemplate(false);
+    setCoverBaseImage(null);
   }, []);
 
   const validatePdf = useCallback((file: File): string | null => {
@@ -183,6 +186,17 @@ export function usePdfUpload(): UsePdfUploadResult {
     [getEffectiveStyle, renderFramedPage]
   );
 
+  const refreshCoverBaseImage = useCallback(async () => {
+    if (!pdfRef.current || pdfRef.current.numPages < 1) {
+      setCoverBaseImage(null);
+      return;
+    }
+
+    const coverStyle = getEffectiveStyle(1);
+    const coverImage = await renderFramedPage(1, PREVIEW_SOURCE_WIDTH, coverStyle);
+    setCoverBaseImage(coverImage);
+  }, [getEffectiveStyle, renderFramedPage]);
+
   const setCurrentPage = useCallback(
     async (page: number) => {
       await refreshPreview(page);
@@ -214,9 +228,10 @@ export function usePdfUpload(): UsePdfUploadResult {
 
       if (pdfRef.current) {
         await refreshPreview(currentPage, template.settings);
+        await refreshCoverBaseImage();
       }
     },
-    [currentPage, refreshPreview]
+    [currentPage, refreshCoverBaseImage, refreshPreview]
   );
 
   const updateFrameSetting = useCallback(
@@ -230,9 +245,10 @@ export function usePdfUpload(): UsePdfUploadResult {
 
       if (pdfRef.current) {
         await refreshPreview(currentPage, next);
+        await refreshCoverBaseImage();
       }
     },
-    [currentPage, frameSettings, refreshPreview]
+    [currentPage, frameSettings, refreshCoverBaseImage, refreshPreview]
   );
 
   const applyTemplateToTarget = useCallback(
@@ -265,6 +281,9 @@ export function usePdfUpload(): UsePdfUploadResult {
         if (pages.includes(currentPage)) {
           await refreshPreview(currentPage);
         }
+        if (pages.includes(1)) {
+          await refreshCoverBaseImage();
+        }
       } catch (applyError) {
         const message = applyError instanceof Error ? applyError.message : "模板应用失败";
         setError(message);
@@ -272,7 +291,15 @@ export function usePdfUpload(): UsePdfUploadResult {
         setIsApplyingTemplate(false);
       }
     },
-    [currentPage, frameSettings, refreshPreview, refreshThumbnails, selectedPages, totalPages]
+    [
+      currentPage,
+      frameSettings,
+      refreshCoverBaseImage,
+      refreshPreview,
+      refreshThumbnails,
+      selectedPages,
+      totalPages
+    ]
   );
 
   const handleFileSelect = useCallback(
@@ -334,6 +361,7 @@ export function usePdfUpload(): UsePdfUploadResult {
         setStatus("ready");
 
         await refreshPreview(1);
+        await refreshCoverBaseImage();
       } catch (parseError) {
         reset();
         setStatus("error");
@@ -341,7 +369,7 @@ export function usePdfUpload(): UsePdfUploadResult {
         setError(message);
       }
     },
-    [frameSettings, refreshPreview, renderFramedPage, reset, validatePdf]
+    [frameSettings, refreshCoverBaseImage, refreshPreview, renderFramedPage, reset, validatePdf]
   );
 
   return useMemo(
@@ -359,6 +387,7 @@ export function usePdfUpload(): UsePdfUploadResult {
       activeTemplateId,
       frameSettings,
       isApplyingTemplate,
+      coverBaseImage,
       handleFileSelect,
       setCurrentPage,
       togglePageSelected,
@@ -381,6 +410,7 @@ export function usePdfUpload(): UsePdfUploadResult {
       activeTemplateId,
       frameSettings,
       isApplyingTemplate,
+      coverBaseImage,
       handleFileSelect,
       setCurrentPage,
       togglePageSelected,

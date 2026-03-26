@@ -4,9 +4,22 @@ import { PageList } from "@/components/upload/PageList";
 import { PdfDropzone } from "@/components/upload/PdfDropzone";
 import { PdfPreview } from "@/components/upload/PdfPreview";
 import { TemplatePanel } from "@/components/upload/TemplatePanel";
+import { CoverPanel } from "@/components/cover/CoverPanel";
+import { CoverRenderer } from "@/components/cover/CoverRenderer";
+import { COVER_LAYOUTS, DEFAULT_COVER_LAYOUT } from "@/constants/coverLayouts";
 import { usePdfUpload } from "@/hooks/usePdfUpload";
+import type { CoverDraft } from "@/types/cover";
+import { useState } from "react";
 
 export function PdfWorkspace() {
+  const [coverDraft, setCoverDraft] = useState<CoverDraft>({
+    title: "3 分钟看懂这份 PDF",
+    subtitle: "提炼重点 + 可直接复用",
+    emoji: "✨",
+    tags: ["干货"],
+    layout: DEFAULT_COVER_LAYOUT.id
+  });
+
   const {
     status,
     progress,
@@ -21,6 +34,7 @@ export function PdfWorkspace() {
     activeTemplateId,
     frameSettings,
     isApplyingTemplate,
+    coverBaseImage,
     handleFileSelect,
     setCurrentPage,
     togglePageSelected,
@@ -92,6 +106,15 @@ export function PdfWorkspace() {
           onSettingChange={updateFrameSetting}
           onApply={applyTemplateToTarget}
         />
+      </div>
+
+      <div className="grid gap-4 xl:grid-cols-[360px_1fr]">
+        <CoverPanel
+          draft={coverDraft}
+          layoutOptions={COVER_LAYOUTS.map((layout) => ({ id: layout.id, name: layout.name }))}
+          onDraftChange={setCoverDraft}
+        />
+        <CoverRenderer baseImage={coverBaseImage} draft={coverDraft} />
       </div>
     </div>
   );

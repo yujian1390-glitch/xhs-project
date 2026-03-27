@@ -27,10 +27,24 @@ export function CoverRenderer({ baseImage, draft, onExportReady }: CoverRenderer
       return;
     }
 
+    let cancelled = false;
     const image = new window.Image();
     image.crossOrigin = "anonymous";
     image.src = baseImage;
-    image.onload = () => setImageObj(image);
+    image.onload = () => {
+      if (!cancelled) {
+        setImageObj(image);
+      }
+    };
+    image.onerror = () => {
+      if (!cancelled) {
+        setImageObj(null);
+      }
+    };
+
+    return () => {
+      cancelled = true;
+    };
   }, [baseImage]);
 
   const layout = useMemo(

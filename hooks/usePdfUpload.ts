@@ -3,7 +3,16 @@
 import { DEFAULT_TEMPLATE, FRAME_TEMPLATES } from "@/constants/frameTemplates";
 import { useCallback, useMemo, useRef, useState } from "react";
 import type { ApplyTarget, FrameStyleSettings } from "@/types/frameTemplate";
+import type { ExportFormat } from "@/utils/exportHelpers";
+import {
+  buildPageFileName,
+  convertDataUrlFormat,
+  dataUrlToBlob,
+  sanitizeDocName,
+  triggerBlobDownload
+} from "@/utils/exportHelpers";
 import { renderImageWithFrame } from "@/utils/canvasFrame";
+import JSZip from "jszip";
 
 type ParseStatus = "idle" | "parsing" | "ready" | "error";
 
@@ -22,6 +31,9 @@ interface UsePdfUploadResult {
   frameSettings: FrameStyleSettings;
   isApplyingTemplate: boolean;
   coverBaseImage: string | null;
+  isExporting: boolean;
+  exportProgress: number;
+  exportSuccessMessage: string;
   handleFileSelect: (file: File) => Promise<void>;
   setCurrentPage: (page: number) => Promise<void>;
   togglePageSelected: (page: number) => void;
@@ -31,6 +43,12 @@ interface UsePdfUploadResult {
     value: FrameStyleSettings[K]
   ) => Promise<void>;
   applyTemplateToTarget: (target: ApplyTarget) => Promise<void>;
+  exportPages: (options: {
+    target: "current" | "selected" | "all";
+    format: ExportFormat;
+    zip: boolean;
+  }) => Promise<void>;
+  clearExportSuccess: () => void;
   reset: () => void;
 }
 
@@ -53,6 +71,9 @@ export function usePdfUpload(): UsePdfUploadResult {
   const [frameSettings, setFrameSettings] = useState<FrameStyleSettings>(DEFAULT_TEMPLATE.settings);
   const [isApplyingTemplate, setIsApplyingTemplate] = useState(false);
   const [coverBaseImage, setCoverBaseImage] = useState<string | null>(null);
+  const [isExporting, setIsExporting] = useState(false);
+  const [exportProgress, setExportProgress] = useState(0);
+  const [exportSuccessMessage, setExportSuccessMessage] = useState("");
 
   const pdfRef = useRef<any>(null);
   const appliedPageStyleRef = useRef<Map<number, FrameStyleSettings>>(new Map());
@@ -74,6 +95,9 @@ export function usePdfUpload(): UsePdfUploadResult {
     setFrameSettings(DEFAULT_TEMPLATE.settings);
     setIsApplyingTemplate(false);
     setCoverBaseImage(null);
+    setIsExporting(false);
+    setExportProgress(0);
+    setExportSuccessMessage("");
   }, []);
 
   const validatePdf = useCallback((file: File): string | null => {
@@ -372,6 +396,82 @@ export function usePdfUpload(): UsePdfUploadResult {
     [frameSettings, refreshCoverBaseImage, refreshPreview, renderFramedPage, reset, validatePdf]
   );
 
+  const clearExportSuccess = useCallback(() => {
+    setExportSuccessMessage("");
+  }, []);
+
+  const exportPages = useCallback(
+    async (options: { target: "current" | "selected" | "all"; format: ExportFormat; zip: boolean }) => {
+      if (!pdfRef.current || totalPages === 0) {
+        return;
+      }
+
+      setIsExporting(true);
+      setExportProgress(0);
+      setExportSuccessMessage("");
+
+      try {
+        let pages: number[] = [];
+        if (options.target === "current") {
+          pages = [currentPage];
+        } else if (options.target === "selected") {
+          pages = Array.from(selectedPages.values()).sort((a, b) => a - b);
+        } else {
+          pages = Array.from({ length: totalPages }, (_, index) => index + 1);
+        }
+
+        if (pages.length === 0) {
+          setIsExporting(false);
+          return;
+        }
+
+        const docName = sanitizeDocName(fileName);
+
+        if (pages.length === 1 || !options.zip) {
+          if (pages.length === 1) {
+            const page = pages[0];
+            const image = await renderFramedPage(page, PREVIEW_SOURCE_WIDTH, getEffectiveStyle(page));
+            const converted = await convertDataUrlFormat(image, options.format);
+            const fileNameOnly = buildPageFileName(docName, page, options.format);
+            triggerBlobDownload(dataUrlToBlob(converted), fileNameOnly);
+          } else {
+            for (let index = 0; index < pages.length; index += 1) {
+              const page = pages[index];
+              const image = await renderFramedPage(page, PREVIEW_SOURCE_WIDTH, getEffectiveStyle(page));
+              const converted = await convertDataUrlFormat(image, options.format);
+              const fileNameOnly = buildPageFileName(docName, page, options.format);
+              triggerBlobDownload(dataUrlToBlob(converted), fileNameOnly);
+              setExportProgress(Math.round(((index + 1) / pages.length) * 100));
+            }
+          }
+        } else {
+          const zip = new JSZip();
+
+          for (let index = 0; index < pages.length; index += 1) {
+            const page = pages[index];
+            const image = await renderFramedPage(page, PREVIEW_SOURCE_WIDTH, getEffectiveStyle(page));
+            const converted = await convertDataUrlFormat(image, options.format);
+            const fileNameOnly = buildPageFileName(docName, page, options.format);
+            zip.file(fileNameOnly, dataUrlToBlob(converted));
+            setExportProgress(Math.round(((index + 1) / pages.length) * 85));
+          }
+
+          const zipBlob = await zip.generateAsync(
+            { type: "blob" },
+            (metadata) => setExportProgress(85 + Math.round(metadata.percent * 0.15))
+          );
+          triggerBlobDownload(zipBlob, `${docName}_${options.target}.zip`);
+        }
+
+        setExportProgress(100);
+        setExportSuccessMessage(`已完成导出，共 ${pages.length} 张图片。`);
+      } finally {
+        setIsExporting(false);
+      }
+    },
+    [currentPage, fileName, getEffectiveStyle, selectedPages, totalPages, renderFramedPage]
+  );
+
   return useMemo(
     () => ({
       status,
@@ -388,12 +488,17 @@ export function usePdfUpload(): UsePdfUploadResult {
       frameSettings,
       isApplyingTemplate,
       coverBaseImage,
+      isExporting,
+      exportProgress,
+      exportSuccessMessage,
       handleFileSelect,
       setCurrentPage,
       togglePageSelected,
       setTemplate,
       updateFrameSetting,
       applyTemplateToTarget,
+      exportPages,
+      clearExportSuccess,
       reset
     }),
     [
@@ -411,12 +516,17 @@ export function usePdfUpload(): UsePdfUploadResult {
       frameSettings,
       isApplyingTemplate,
       coverBaseImage,
+      isExporting,
+      exportProgress,
+      exportSuccessMessage,
       handleFileSelect,
       setCurrentPage,
       togglePageSelected,
       setTemplate,
       updateFrameSetting,
       applyTemplateToTarget,
+      exportPages,
+      clearExportSuccess,
       reset
     ]
   );

@@ -4,17 +4,22 @@ import { COVER_LAYOUTS } from "@/constants/coverLayouts";
 import type { CoverDraft } from "@/types/cover";
 import { useEffect, useMemo, useState } from "react";
 import { Image as KonvaImage, Layer, Rect, Stage, Tag, Text, Label } from "react-konva";
+import type { ExportFormat } from "@/utils/exportHelpers";
+import { useRef } from "react";
+import type Konva from "konva";
 
 interface CoverRendererProps {
   baseImage: string | null;
   draft: CoverDraft;
+  onExportReady?: (exporter: ((format: ExportFormat) => string | null) | null) => void;
 }
 
 const CANVAS_WIDTH = 864;
 const CANVAS_HEIGHT = 1152;
 
-export function CoverRenderer({ baseImage, draft }: CoverRendererProps) {
+export function CoverRenderer({ baseImage, draft, onExportReady }: CoverRendererProps) {
   const [imageObj, setImageObj] = useState<HTMLImageElement | null>(null);
+  const stageRef = useRef<Konva.Stage | null>(null);
 
   useEffect(() => {
     if (!baseImage) {
@@ -33,6 +38,26 @@ export function CoverRenderer({ baseImage, draft }: CoverRendererProps) {
     [draft.layout]
   );
 
+  useEffect(() => {
+    if (!onExportReady) {
+      return;
+    }
+
+    onExportReady((format) => {
+      if (!stageRef.current) {
+        return null;
+      }
+
+      if (format === "jpg") {
+        return stageRef.current.toDataURL({ mimeType: "image/jpeg", quality: 0.92, pixelRatio: 2 });
+      }
+
+      return stageRef.current.toDataURL({ mimeType: "image/png", pixelRatio: 2 });
+    });
+
+    return () => onExportReady(null);
+  }, [onExportReady]);
+
   if (!baseImage || !imageObj) {
     return (
       <section className="flex h-[520px] items-center justify-center rounded-lg border border-dashed border-slate-300 bg-white text-sm text-slate-500">
@@ -45,7 +70,7 @@ export function CoverRenderer({ baseImage, draft }: CoverRendererProps) {
     <section className="rounded-lg border border-slate-200 bg-white p-3">
       <h3 className="mb-3 text-base font-semibold">首图实时预览（Konva）</h3>
       <div className="overflow-auto rounded border border-slate-200">
-        <Stage width={CANVAS_WIDTH} height={CANVAS_HEIGHT}>
+        <Stage ref={stageRef} width={CANVAS_WIDTH} height={CANVAS_HEIGHT}>
           <Layer>
             <KonvaImage image={imageObj} width={CANVAS_WIDTH} height={CANVAS_HEIGHT} />
 

@@ -7,9 +7,19 @@ import { TemplatePanel } from "@/components/upload/TemplatePanel";
 import { CoverPanel } from "@/components/cover/CoverPanel";
 import { CoverRenderer } from "@/components/cover/CoverRenderer";
 import { COVER_LAYOUTS, DEFAULT_COVER_LAYOUT } from "@/constants/coverLayouts";
+import { ExportPanel } from "@/components/export/ExportPanel";
+import { ExportSuccessModal } from "@/components/export/ExportSuccessModal";
 import { usePdfUpload } from "@/hooks/usePdfUpload";
 import type { CoverDraft } from "@/types/cover";
-import { useState } from "react";
+import type { ExportFormat } from "@/utils/exportHelpers";
+import {
+  buildPageFileName,
+  dataUrlToBlob,
+  sanitizeDocName,
+  triggerBlobDownload
+} from "@/utils/exportHelpers";
+import JSZip from "jszip";
+import { useMemo, useState } from "react";
 
 export function PdfWorkspace() {
   const [coverDraft, setCoverDraft] = useState<CoverDraft>({
@@ -19,6 +29,12 @@ export function PdfWorkspace() {
     tags: ["干货"],
     layout: DEFAULT_COVER_LAYOUT.id
   });
+  const [exportFormat, setExportFormat] = useState<ExportFormat>("png");
+  const [exportAsZip, setExportAsZip] = useState(true);
+  const [coverExporter, setCoverExporter] = useState<((format: ExportFormat) => string | null) | null>(
+    null
+  );
+  const [coverExportSuccessMessage, setCoverExportSuccessMessage] = useState("");
 
   const {
     status,
@@ -35,14 +51,43 @@ export function PdfWorkspace() {
     frameSettings,
     isApplyingTemplate,
     coverBaseImage,
+    isExporting,
+    exportProgress,
+    exportSuccessMessage,
     handleFileSelect,
     setCurrentPage,
     togglePageSelected,
     setTemplate,
     updateFrameSetting,
     applyTemplateToTarget,
+    exportPages,
+    clearExportSuccess,
     reset
   } = usePdfUpload();
+
+  const docName = useMemo(() => sanitizeDocName(fileName), [fileName]);
+
+  const exportCover = async () => {
+    if (!coverExporter) {
+      return;
+    }
+
+    const dataUrl = coverExporter(exportFormat);
+    if (!dataUrl) {
+      return;
+    }
+
+    const coverName = buildPageFileName(docName, 1, exportFormat);
+    if (exportAsZip) {
+      const zip = new JSZip();
+      zip.file(coverName, dataUrlToBlob(dataUrl));
+      const blob = await zip.generateAsync({ type: "blob" });
+      triggerBlobDownload(blob, `${docName}_cover.zip`);
+    } else {
+      triggerBlobDownload(dataUrlToBlob(dataUrl), coverName);
+    }
+    setCoverExportSuccessMessage("首图导出完成。");
+  };
 
   return (
     <div className="space-y-4">
@@ -114,8 +159,45 @@ export function PdfWorkspace() {
           layoutOptions={COVER_LAYOUTS.map((layout) => ({ id: layout.id, name: layout.name }))}
           onDraftChange={setCoverDraft}
         />
-        <CoverRenderer baseImage={coverBaseImage} draft={coverDraft} />
+        <CoverRenderer baseImage={coverBaseImage} draft={coverDraft} onExportReady={setCoverExporter} />
       </div>
+
+      <div className="grid gap-4 xl:grid-cols-[1fr_320px]">
+        <div className="rounded-lg border border-slate-200 bg-white p-4 text-sm text-slate-600">
+          <h3 className="text-base font-semibold text-slate-900">导出说明</h3>
+          <ul className="mt-2 list-disc space-y-1 pl-5">
+            <li>支持导出当前页 / 首图 / 已勾选页面 / 全部页面。</li>
+            <li>支持 PNG 与 JPG。</li>
+            <li>多图可打包 ZIP。</li>
+            <li>命名格式：文档名_01_首图.png、文档名_02_第2页.png。</li>
+          </ul>
+        </div>
+        <ExportPanel
+          format={exportFormat}
+          asZip={exportAsZip}
+          isExporting={isExporting}
+          progress={exportProgress}
+          onFormatChange={setExportFormat}
+          onZipChange={setExportAsZip}
+          onExportCurrent={async () =>
+            exportPages({ target: "current", format: exportFormat, zip: exportAsZip })
+          }
+          onExportCover={exportCover}
+          onExportSelected={async () =>
+            exportPages({ target: "selected", format: exportFormat, zip: exportAsZip })
+          }
+          onExportAll={async () => exportPages({ target: "all", format: exportFormat, zip: exportAsZip })}
+        />
+      </div>
+
+      <ExportSuccessModal
+        open={exportSuccessMessage.length > 0 || coverExportSuccessMessage.length > 0}
+        message={exportSuccessMessage || coverExportSuccessMessage}
+        onClose={() => {
+          clearExportSuccess();
+          setCoverExportSuccessMessage("");
+        }}
+      />
     </div>
   );
 }

@@ -14,7 +14,8 @@
     "react-dom": "19.0.0",
     "pdfjs-dist": "4.10.38",
     "konva": "9.3.18",
-    "react-konva": "19.0.7"
+    "react-konva": "19.0.7",
+    "jszip": "3.10.1"
   },
   "devDependencies": {
     "@types/node": "22.13.10",

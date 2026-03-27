@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>离线预览版 - 文档转小红书图片</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <header class="header">
+      <h1>文档转小红书图片（离线可跑预览版）</h1>
+      <p>无需 npm install，直接启动静态服务即可预览交互。</p>
+    </header>
+
+    <main class="container">
+      <section class="upload-card" id="dropzone">
+        <input id="pdfInput" type="file" accept="application/pdf,.pdf" hidden />
+        <p>拖拽 PDF 到此，或点击按钮上传</p>
+        <button id="pickFileBtn">选择 PDF</button>
+        <p id="statusText">未上传文件</p>
+        <div class="progress-track">
+          <div id="progressBar" class="progress-bar"></div>
+        </div>
+        <p id="errorText" class="error"></p>
+      </section>
+
+      <section class="workspace">
+        <aside class="panel" id="thumbPanel">
+          <h2>页码列表</h2>
+          <div id="thumbList" class="thumb-list"></div>
+        </aside>
+
+        <section class="panel preview-panel">
+          <h2 id="previewTitle">当前页预览</h2>
+          <div class="preview-box">
+            <img id="previewImage" alt="当前页预览" />
+            <p id="previewEmpty">上传后显示预览</p>
+          </div>
+        </section>
+
+        <aside class="panel template-panel">
+          <h2>边框模板</h2>
+          <div id="templateButtons" class="template-buttons"></div>
+
+          <label>画布比例
+            <select id="ratioSelect">
+              <option value="origin">origin</option>
+              <option value="3:4">3:4</option>
+              <option value="1:1">1:1</option>
+            </select>
+          </label>
+          <label>背景色 <input id="bgColor" type="color" /></label>
+          <label>边框色 <input id="borderColor" type="color" /></label>
+          <label>边框粗细 <input id="borderWidth" type="range" min="0" max="48" /></label>
+          <label>圆角 <input id="borderRadius" type="range" min="0" max="80" /></label>
+          <label>外边距 <input id="outerMargin" type="range" min="0" max="120" /></label>
+          <label>内边距 <input id="innerPadding" type="range" min="0" max="80" /></label>
+
+          <div class="apply-buttons">
+            <button data-target="current">应用到当前页</button>
+            <button data-target="selected">应用到已勾选页面</button>
+            <button data-target="all">应用到全部页面</button>
+          </div>
+        </aside>
+      </section>
+    </main>
+
+    <script type="module" src="./app.js"></script>
+  </body>
+</html>
